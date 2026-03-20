@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping
+                  https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+
+    <entity name="App\Exercise\Domain\Model\SpeciesExercise" table="species_exercises">
+        <id name="id" type="string" length="36">
+            <generator strategy="NONE"/>
+        </id>
+
+        <field name="speciesValue" type="string" length="10" column="species"/>
+        <field name="compositionId" type="string" length="36" column="composition_id"/>
+        <field name="completed" type="boolean" column="completed"/>
+        <field name="feedback" type="text" column="feedback" nullable="true"/>
+        <field name="createdAt" type="datetime_immutable" column="created_at"/>
+
+        <lifecycle-callbacks>
+            <lifecycle-callback type="postLoad" method="restoreFromData"/>
+            <lifecycle-callback type="prePersist" method="syncToData"/>
+            <lifecycle-callback type="preUpdate" method="syncToData"/>
+        </lifecycle-callbacks>
+    </entity>
+
+</doctrine-mapping>

@@ -1,0 +1,17 @@
+composition_controllers:
+    resource:
+        path: ../src/Composition/Infrastructure/Api/
+        namespace: App\Composition\Infrastructure\Api
+    type: attribute
+
+analysis_controllers:
+    resource:
+        path: ../src/Analysis/Infrastructure/Api/
+        namespace: App\Analysis\Infrastructure\Api
+    type: attribute
+
+exercise_controllers:
+    resource:
+        path: ../src/Exercise/Infrastructure/Api/
+        namespace: App\Exercise\Infrastructure\Api
+    type: attribute
