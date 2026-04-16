@@ -10,6 +10,7 @@ services:
       - postgres
     environment:
       - APP_ENV=dev
+      - APP_URL=http://localhost:8080
       - DATABASE_URL=postgresql://counterpoint:counterpoint@postgres:5432/counterpoint?serverVersion=16&charset=utf8
     networks:
       - counterpoint_ddd
