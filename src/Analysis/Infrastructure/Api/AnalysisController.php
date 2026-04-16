@@ -46,8 +46,22 @@ final class AnalysisController extends AbstractController
             )
         ),
             new OA\Response(
+                response: 400,
+                description: 'Bad request - invalid JSON or missing/invalid fields',
+                content: new OA\JsonContent(
+                    properties: [new OA\Property(property: 'error', type: 'string')]
+                )
+            ),
+            new OA\Response(
                 response: 404,
                 description: 'Composition not found',
+                content: new OA\JsonContent(
+                    properties: [new OA\Property(property: 'error', type: 'string')]
+                )
+            ),
+            new OA\Response(
+                response: 422,
+                description: 'Unprocessable entity - domain validation failed',
                 content: new OA\JsonContent(
                     properties: [new OA\Property(property: 'error', type: 'string')]
                 )
@@ -58,11 +72,18 @@ final class AnalysisController extends AbstractController
         Request $request,
         AnalyzeCompositionHandler $handler,
     ): JsonResponse {
-        $data = json_decode($request->getContent(), true) ?? [];
-        $compositionId = $data['compositionId'] ?? '';
+        try {
+            $data = json_decode($request->getContent(), true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            return $this->json(['error' => 'Invalid JSON in request body'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if (!isset($data['compositionId']) || $data['compositionId'] === '') {
+            return $this->json(['error' => 'Missing required field: compositionId'], Response::HTTP_BAD_REQUEST);
+        }
 
         try {
-            $query = new AnalyzeCompositionQuery($compositionId);
+            $query = new AnalyzeCompositionQuery($data['compositionId']);
             $results = $handler($query);
 
             $output = [];
@@ -71,8 +92,12 @@ final class AnalysisController extends AbstractController
             }
 
             return $this->json($output);
+        } catch (\ValueError $e) {
+            return $this->json(['error' => 'Invalid value: ' . $e->getMessage()], Response::HTTP_BAD_REQUEST);
         } catch (\InvalidArgumentException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
+        } catch (\DomainException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
     }
 }

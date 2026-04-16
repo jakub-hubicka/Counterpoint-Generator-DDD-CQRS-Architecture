@@ -51,6 +51,20 @@ final class VoiceController extends AbstractController
                         ], type: 'object')
                     ]
                 )
+            ),
+            new OA\Response(
+                response: 400,
+                description: 'Bad request - invalid JSON or missing/invalid fields',
+                content: new OA\JsonContent(
+                    properties: [new OA\Property(property: 'error', type: 'string')]
+                )
+            ),
+            new OA\Response(
+                response: 422,
+                description: 'Unprocessable entity - domain validation failed',
+                content: new OA\JsonContent(
+                    properties: [new OA\Property(property: 'error', type: 'string')]
+                )
             )
         ]
     )]
@@ -58,20 +72,37 @@ final class VoiceController extends AbstractController
         Request $request,
         CantusFirmusRepositoryInterface $cfRepository,
     ): JsonResponse {
-        $data = json_decode($request->getContent(), true) ?? [];
-        $compositionId = (string) Uuid::v7();
-        $tonic = Pitch::from($data['tonic'] ?? 'C');
+        try {
+            $data = json_decode($request->getContent(), true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            return $this->json(['error' => 'Invalid JSON in request body'], Response::HTTP_BAD_REQUEST);
+        }
 
-        $cf = new CantusFirmus(Uuid::v7(), $compositionId, $tonic);
-        $cfRepository->save($cf);
+        if (!isset($data['tonic']) || $data['tonic'] === '') {
+            return $this->json(['error' => 'Missing required field: tonic'], Response::HTTP_BAD_REQUEST);
+        }
 
-        return $this->json([
-            'compositionId' => $compositionId,
-            'cantusFirmus' => [
-                'id' => $cf->id(),
-                'tonic' => $cf->tonic()->value,
-            ],
-        ], Response::HTTP_CREATED);
+        try {
+            $compositionId = (string) Uuid::v7();
+            $tonic = Pitch::from($data['tonic']);
+
+            $cf = new CantusFirmus(Uuid::v7(), $compositionId, $tonic);
+            $cfRepository->save($cf);
+
+            return $this->json([
+                'compositionId' => $compositionId,
+                'cantusFirmus' => [
+                    'id' => $cf->id(),
+                    'tonic' => $cf->tonic()->value,
+                ],
+            ], Response::HTTP_CREATED);
+        } catch (\ValueError $e) {
+            return $this->json(['error' => 'Invalid value: ' . $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        } catch (\DomainException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
     }
 
     #[Route('/compositions/{id}/voices', name: 'api_add_voice', methods: ['POST'])]
@@ -108,6 +139,20 @@ final class VoiceController extends AbstractController
                         new OA\Property(property: 'voiceType', type: 'string')
                     ]
                 )
+            ),
+            new OA\Response(
+                response: 400,
+                description: 'Bad request - invalid JSON or missing/invalid fields',
+                content: new OA\JsonContent(
+                    properties: [new OA\Property(property: 'error', type: 'string')]
+                )
+            ),
+            new OA\Response(
+                response: 422,
+                description: 'Unprocessable entity - domain validation failed',
+                content: new OA\JsonContent(
+                    properties: [new OA\Property(property: 'error', type: 'string')]
+                )
             )
         ]
     )]
@@ -116,20 +161,36 @@ final class VoiceController extends AbstractController
         Request $request,
         AddVoiceHandler $handler,
     ): JsonResponse {
-        $data = json_decode($request->getContent(), true) ?? [];
+        try {
+            $data = json_decode($request->getContent(), true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            return $this->json(['error' => 'Invalid JSON in request body'], Response::HTTP_BAD_REQUEST);
+        }
 
-        $command = new AddVoiceCommand(
-            compositionId: $id,
-            voiceType: $data['voiceType'] ?? '',
-        );
+        if (!isset($data['voiceType']) || $data['voiceType'] === '') {
+            return $this->json(['error' => 'Missing required field: voiceType'], Response::HTTP_BAD_REQUEST);
+        }
 
-        $voice = $handler($command);
+        try {
+            $command = new AddVoiceCommand(
+                compositionId: $id,
+                voiceType: $data['voiceType'],
+            );
 
-        return $this->json([
-            'id' => $voice->id(),
-            'compositionId' => $voice->compositionId(),
-            'voiceType' => $voice->voiceType()->value,
-        ], Response::HTTP_CREATED);
+            $voice = $handler($command);
+
+            return $this->json([
+                'id' => $voice->id(),
+                'compositionId' => $voice->compositionId(),
+                'voiceType' => $voice->voiceType()->value,
+            ], Response::HTTP_CREATED);
+        } catch (\ValueError $e) {
+            return $this->json(['error' => 'Invalid value: ' . $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        } catch (\DomainException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
     }
 
     #[Route('/voices/{id}/notes', name: 'api_write_note', methods: ['POST'])]
@@ -166,6 +227,13 @@ final class VoiceController extends AbstractController
                 )
             ),
             new OA\Response(
+                response: 400,
+                description: 'Bad request - invalid JSON or missing/invalid fields',
+                content: new OA\JsonContent(
+                    properties: [new OA\Property(property: 'error', type: 'string')]
+                )
+            ),
+            new OA\Response(
                 response: 422,
                 description: 'Invalid note data',
                 content: new OA\JsonContent(
@@ -179,21 +247,40 @@ final class VoiceController extends AbstractController
         Request $request,
         WriteNoteHandler $handler,
     ): JsonResponse {
-        $data = json_decode($request->getContent(), true) ?? [];
+        try {
+            $data = json_decode($request->getContent(), true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            return $this->json(['error' => 'Invalid JSON in request body'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $requiredFields = ['pitch', 'octave', 'duration'];
+        foreach ($requiredFields as $field) {
+            if (!isset($data[$field]) || $data[$field] === '') {
+                return $this->json(['error' => "Missing required field: {$field}"], Response::HTTP_BAD_REQUEST);
+            }
+        }
+
+        if (!is_numeric($data['octave'])) {
+            return $this->json(['error' => 'Field octave must be a number'], Response::HTTP_BAD_REQUEST);
+        }
 
         try {
             $command = new WriteNoteCommand(
                 voiceId: $id,
-                pitch: $data['pitch'] ?? '',
-                octave: (int) ($data['octave'] ?? 0),
-                duration: $data['duration'] ?? '',
+                pitch: $data['pitch'],
+                octave: (int) $data['octave'],
+                duration: $data['duration'],
             );
 
             $handler($command);
 
             return $this->json(['status' => 'ok'], Response::HTTP_CREATED);
+        } catch (\ValueError $e) {
+            return $this->json(['error' => 'Invalid value: ' . $e->getMessage()], Response::HTTP_BAD_REQUEST);
         } catch (\DomainException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
     }
 
@@ -222,6 +309,13 @@ final class VoiceController extends AbstractController
                         new OA\Property(property: 'voices', type: 'array', items: new OA\Items(type: 'object'))
                     ]
                 )
+            ),
+            new OA\Response(
+                response: 404,
+                description: 'Composition not found',
+                content: new OA\JsonContent(
+                    properties: [new OA\Property(property: 'error', type: 'string')]
+                )
             )
         ]
     )]
@@ -229,9 +323,13 @@ final class VoiceController extends AbstractController
         string $id,
         GetCompositionHandler $handler,
     ): JsonResponse {
-        $query = new GetCompositionQuery($id);
-        $result = $handler($query);
+        try {
+            $query = new GetCompositionQuery($id);
+            $result = $handler($query);
 
-        return $this->json($result);
+            return $this->json($result);
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
+        }
     }
 }

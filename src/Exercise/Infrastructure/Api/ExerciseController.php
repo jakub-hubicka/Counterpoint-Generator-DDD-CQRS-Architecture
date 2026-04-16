@@ -45,6 +45,20 @@ final class ExerciseController extends AbstractController
                         new OA\Property(property: 'completed', type: 'boolean')
                     ]
                 )
+            ),
+            new OA\Response(
+                response: 400,
+                description: 'Bad request - invalid JSON or missing/invalid fields',
+                content: new OA\JsonContent(
+                    properties: [new OA\Property(property: 'error', type: 'string')]
+                )
+            ),
+            new OA\Response(
+                response: 422,
+                description: 'Unprocessable entity - domain validation failed',
+                content: new OA\JsonContent(
+                    properties: [new OA\Property(property: 'error', type: 'string')]
+                )
             )
         ]
     )]
@@ -52,21 +66,40 @@ final class ExerciseController extends AbstractController
         Request $request,
         StartExerciseHandler $handler,
     ): JsonResponse {
-        $data = json_decode($request->getContent(), true) ?? [];
+        try {
+            $data = json_decode($request->getContent(), true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            return $this->json(['error' => 'Invalid JSON in request body'], Response::HTTP_BAD_REQUEST);
+        }
 
-        $command = new StartExerciseCommand(
-            species: $data['species'] ?? '',
-            compositionId: $data['compositionId'] ?? '',
-        );
+        $requiredFields = ['species', 'compositionId'];
+        foreach ($requiredFields as $field) {
+            if (!isset($data[$field]) || $data[$field] === '') {
+                return $this->json(['error' => "Missing required field: {$field}"], Response::HTTP_BAD_REQUEST);
+            }
+        }
 
-        $exercise = $handler($command);
+        try {
+            $command = new StartExerciseCommand(
+                species: $data['species'],
+                compositionId: $data['compositionId'],
+            );
 
-        return $this->json([
-            'id' => $exercise->id(),
-            'species' => $exercise->species()->value,
-            'compositionId' => $exercise->compositionId(),
-            'completed' => $exercise->isCompleted(),
-        ], Response::HTTP_CREATED);
+            $exercise = $handler($command);
+
+            return $this->json([
+                'id' => $exercise->id(),
+                'species' => $exercise->species()->value,
+                'compositionId' => $exercise->compositionId(),
+                'completed' => $exercise->isCompleted(),
+            ], Response::HTTP_CREATED);
+        } catch (\ValueError $e) {
+            return $this->json(['error' => 'Invalid value: ' . $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        } catch (\DomainException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
     }
 
     #[Route('/exercises/{id}', name: 'api_get_exercise', methods: ['GET'])]
@@ -109,13 +142,17 @@ final class ExerciseController extends AbstractController
         string $id,
         GetExerciseHandler $handler,
     ): JsonResponse {
-        $query = new GetExerciseQuery($id);
-        $result = $handler($query);
+        try {
+            $query = new GetExerciseQuery($id);
+            $result = $handler($query);
 
-        if ($result === null) {
-            return $this->json(['error' => 'Exercise not found'], Response::HTTP_NOT_FOUND);
+            if ($result === null) {
+                return $this->json(['error' => 'Exercise not found'], Response::HTTP_NOT_FOUND);
+            }
+
+            return $this->json($result);
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
         }
-
-        return $this->json($result);
     }
 }
